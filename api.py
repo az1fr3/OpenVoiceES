@@ -102,13 +102,7 @@ class ToneColorConverter(OpenVoiceBaseClass):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if kwargs.get('enable_watermark', True):
-            import wavmark
-            self.watermark_model = wavmark.load_model().to(self.device)
-        else:
-            self.watermark_model = None
-
-
+        self.watermark_model = None
 
     def extract_se(self, ref_wav_list, se_save_path=None):
         if isinstance(ref_wav_list, str):
