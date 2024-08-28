@@ -13,6 +13,7 @@ args = parser.parse_args()
 
 en_ckpt_base = 'checkpoints/base_speakers/EN'
 zh_ckpt_base = 'checkpoints/base_speakers/ZH'
+es_ckpt_base = 'checkpoints/base_speakers/ES'  # New: Spanish checkpoint base
 ckpt_converter = 'checkpoints/converter'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 output_dir = 'outputs'
@@ -23,6 +24,8 @@ en_base_speaker_tts = BaseSpeakerTTS(f'{en_ckpt_base}/config.json', device=devic
 en_base_speaker_tts.load_ckpt(f'{en_ckpt_base}/checkpoint.pth')
 zh_base_speaker_tts = BaseSpeakerTTS(f'{zh_ckpt_base}/config.json', device=device)
 zh_base_speaker_tts.load_ckpt(f'{zh_ckpt_base}/checkpoint.pth')
+es_base_speaker_tts = BaseSpeakerTTS(f'{es_ckpt_base}/config.json', device=device)  # New: Spanish model
+es_base_speaker_tts.load_ckpt(f'{es_ckpt_base}/checkpoint.pth')  # New: Spanish model checkpoint
 tone_color_converter = ToneColorConverter(f'{ckpt_converter}/config.json', device=device)
 tone_color_converter.load_ckpt(f'{ckpt_converter}/checkpoint.pth')
 
@@ -30,9 +33,10 @@ tone_color_converter.load_ckpt(f'{ckpt_converter}/checkpoint.pth')
 en_source_default_se = torch.load(f'{en_ckpt_base}/en_default_se.pth').to(device)
 en_source_style_se = torch.load(f'{en_ckpt_base}/en_style_se.pth').to(device)
 zh_source_se = torch.load(f'{zh_ckpt_base}/zh_default_se.pth').to(device)
+es_source_se = torch.load(f'{es_ckpt_base}/es_default_se.pth').to(device)  # New: Spanish speaker embedding
 
-# This online demo mainly supports English and Chinese
-supported_languages = ['zh', 'en']
+# This online demo supports English, Chinese, and Spanish
+supported_languages = ['zh', 'en', 'es']  # Updated: Added 'es' for Spanish
 
 def predict(prompt, style, audio_file_pth, mic_file_path, use_mic, agree):
     # initialize a empty info
@@ -62,7 +66,7 @@ def predict(prompt, style, audio_file_pth, mic_file_path, use_mic, agree):
             None,
             None,
         )
-    
+
     if language_predicted == "zh":
         tts_model = zh_base_speaker_tts
         source_se = zh_source_se
@@ -75,7 +79,18 @@ def predict(prompt, style, audio_file_pth, mic_file_path, use_mic, agree):
                 None,
                 None,
             )
-
+    elif language_predicted == "es":  # New: Spanish language handling
+        tts_model = es_base_speaker_tts
+        source_se = es_source_se
+        language = 'Spanish'
+        if style not in ['default']:
+            text_hint += f"[ERROR] The style {style} is not supported for Spanish, which should be in ['default']\n"
+            gr.Warning(f"The style {style} is not supported for Spanish, which should be in ['default']")
+            return (
+                text_hint,
+                None,
+                None,
+            )
     else:
         tts_model = en_base_speaker_tts
         if style == 'default':
@@ -127,7 +142,7 @@ def predict(prompt, style, audio_file_pth, mic_file_path, use_mic, agree):
             None,
             None,
         )
-    
+
     # note diffusion_conditioning not used on hifigan (default mode), it will be empty but need to pass it to model.inference
     try:
         target_se, audio_name = se_extractor.get_se(speaker_wav, tone_color_converter, target_dir='processed', vad=True)
@@ -163,23 +178,10 @@ def predict(prompt, style, audio_file_pth, mic_file_path, use_mic, agree):
         speaker_wav,
     )
 
-
-
 title = "MyShell OpenVoice"
 
 description = """
 We introduce OpenVoice, a versatile instant voice cloning approach that requires only a short audio clip from the reference speaker to replicate their voice and generate speech in multiple languages. OpenVoice enables granular control over voice styles, including emotion, accent, rhythm, pauses, and intonation, in addition to replicating the tone color of the reference speaker. OpenVoice also achieves zero-shot cross-lingual voice cloning for languages not included in the massive-speaker training set.
-"""
-
-markdown_table = """
-<div align="center" style="margin-bottom: 10px;">
-
-|               |               |               |
-| :-----------: | :-----------: | :-----------: | 
-| **OpenSource Repo** | **Project Page** | **Join the Community** |        
-| <div style='text-align: center;'><a style="display:inline-block,align:center" href='https://github.com/myshell-ai/OpenVoice'><img src='https://img.shields.io/github/stars/myshell-ai/OpenVoice?style=social' /></a></div> | [OpenVoice](https://research.myshell.ai/open-voice) | [![Discord](https://img.shields.io/discord/1122227993805336617?color=%239B59B6&label=%20Discord%20)](https://discord.gg/myshell) |
-
-</div>
 """
 
 markdown_table_v2 = """
@@ -198,11 +200,10 @@ markdown_table_v2 = """
 content = """
 <div>
   <strong>For multi-lingual & cross-lingual examples, please refer to <a href='https://github.com/myshell-ai/OpenVoice/blob/main/demo_part2.ipynb'>this jupyter notebook</a>.</strong>
-  This online demo mainly supports <strong>English</strong>. The <em>default</em> style also supports <strong>Chinese</strong>. But OpenVoice can adapt to any other language as long as a base speaker is provided.
+  This online demo supports <strong>English</strong>, <strong>Chinese</strong>, and <strong>Spanish</strong>. The <em>default</em> style supports all three languages. But OpenVoice can adapt to any other language as long as a base speaker is provided.
 </div>
 """
 wrapped_markdown_content = f"<div style='border: 1px solid #000; padding: 10px;'>{content}</div>"
-
 
 examples = [
     [
@@ -228,6 +229,14 @@ examples = [
         False,
         True,
     ],
+    [
+        "Hola, este es un ejemplo de texto en español generado por OpenVoice.",
+        'default',
+        "resources/demo_speaker_es.mp3",
+        None,
+        False,
+        True,
+    ],
 ]
 
 with gr.Blocks(analytics_enabled=False) as demo:
@@ -246,7 +255,7 @@ with gr.Blocks(analytics_enabled=False) as demo:
                 gr.Markdown(description)
         with gr.Column():
             gr.Video('https://github.com/myshell-ai/OpenVoice/assets/40556743/3cba936f-82bf-476c-9e52-09f0f417bb2f', autoplay=True)
-            
+
     with gr.Row():
         gr.HTML(wrapped_markdown_content)
 
@@ -259,7 +268,7 @@ with gr.Blocks(analytics_enabled=False) as demo:
             )
             style_gr = gr.Dropdown(
                 label="Style",
-                info="Select a style of output audio for the synthesised speech. (Chinese only support 'default' now)",
+                info="Select a style of output audio for the synthesised speech. (Chinese and Spanish only support 'default' now)",
                 choices=['default', 'whispering', 'cheerful', 'terrified', 'angry', 'sad', 'friendly'],
                 max_choices=1,
                 value="default",
@@ -304,4 +313,4 @@ with gr.Blocks(analytics_enabled=False) as demo:
             tts_button.click(predict, [input_text_gr, style_gr, ref_gr, mic_gr, use_mic_gr, tos_gr], outputs=[out_text_gr, audio_gr, ref_audio_gr])
 
 demo.queue()  
-demo.launch(debug=True, show_api=True, share=args.share)
+demo.
