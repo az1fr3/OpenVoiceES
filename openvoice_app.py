@@ -232,7 +232,7 @@ examples = [
     [
         "Hola, este es un ejemplo de texto en español generado por OpenVoice.",
         'default',
-        "resources/demo_speaker_es.mp3",
+        "resources/demo_speaker0.mp3",
         None,
         False,
         True,
